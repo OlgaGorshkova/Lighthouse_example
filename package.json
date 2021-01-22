@@ -17,7 +17,11 @@
   },
   "homepage": "https://github.com/OlgaGorshkova/Lighthouse_example#readme",
   "devDependencies": {
+    "glob": "^7.1.6",
     "lighthouse": "^7.0.0",
     "yargs": "^16.2.0"
+  },
+  "dependencies": {
+    "eslint": "^7.18.0"
   }
 }
