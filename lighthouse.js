@@ -5,6 +5,7 @@ const glob = require('glob');
 const path = require('path');
 const argv = require('yargs').argv; // for using url-path as an argument in terminal
 const url = require('url');
+//const config = require('./desktop-config.js');
 
 const metricFilter = [
     'first-contentful-paint',
@@ -16,43 +17,30 @@ const metricFilter = [
     'cumulative-layout-shif'
 ];
 
-// const launchChromeAndRunLighthouseNew  = async (url) => {
-//     const chrome = await chromeLauncher.launch({chromeFlags: ['--headless']});
-//     const options = {logLevel: 'info', output: 'html', onlyCategories: ['performance'], port: chrome.port};
-//     const runnerResult = await lighthouse(url, options);
-  
-//     // `.report` is the HTML report as a string
-//     const reportHtml = runnerResult.report;
-//     fs.writeFileSync('lhreport.html', reportHtml);
-  
-//     // `.lhr` is the Lighthouse Result as a JS object
-//     console.log('Report is done for', runnerResult.lhr.finalUrl);
-//     console.log('Performance score was', runnerResult.lhr.categories.performance.score * 100);
-  
-//     await chrome.kill();
-// };
+const rootDirName = 'reports';
+if(!fs.existsSync(rootDirName)) {        
+    fs.mkdirSync(rootDirName);
+}
 
-const launchChromeAndRunLighthouse = url => {
-    return chromeLauncher.launch().then(chrome => {
-        const  opts = {
-            port: chrome.port,
-            onlyCategories: ['performance'],
-        };
-        return lighthouse(url, opts).then(results => {
-            return chrome.kill().then(() => {
-                return {
-                    js: results.lhr, // return Lighthouse Result Object
-                    json: results.report
-                };
-            });
-        });
-    });
+const launchChromeAndRunLighthouse = async (url) => {
+    const chrome = await chromeLauncher.launch({chromeFlags: ['--headless']});
+    const options = {
+      onlyCategories: ['performance'],
+      port: chrome.port,     
+    };
+    // const result = await lighthouse(url, options, config);
+    const result = await lighthouse(url, options);
+    
+    await chrome.kill();
+  
+    return {
+      js: result.lhr,
+      json: result.report
+    };
 };
 
 const getContents = pathStr => {
-    const output = fs.readFileSync(pathStr, 'utf8', (err, results) => {
-        return results;
-    });
+    const output = fs.readFileSync(pathStr, 'utf8', (err, results) => results);
     return JSON.parse(output);
 };
 
@@ -61,6 +49,9 @@ const compareReports = (from, to) => {
       const per = ((to - from) / from) * 100;
       return Math.round(per * 100) / 100;
     };
+
+    console.log('Performance score previous was ',Math.round(from.categories.performance.score * 100));
+    console.log('Performance score current is ',Math.round(to.categories.performance.score * 100));
   
     for (let auditObj in from['audits']) {
         if (metricFilter.includes(auditObj)) {
@@ -87,24 +78,7 @@ const compareReports = (from, to) => {
     console.log('\x1b[37m');
 };
 
-const compareScores = (res) => {  
-    for (let auditObj in res['audits']) {
-        if (metricFilter.includes(auditObj)) {
-            console.log(auditObj, res['audits'][auditObj].score);        }
-    }
-};
-
-const rootDirName = 'reports';
-if(!fs.existsSync(rootDirName)) {        
-    fs.mkdirSync(rootDirName);
-}
-
-if (argv.from && argv.to) {
-    compareReports(
-      getContents(argv.from + '.json'),
-      getContents(argv.to + '.json')
-    );
-} else if (argv.url) {
+if (argv.url) {
     const urlOdj = new URL(argv.url);
     
     let dirName = urlOdj.host.replace('www.', '').replace(/:/g, '_');
@@ -132,14 +106,12 @@ if (argv.from && argv.to) {
             const recentReport = new Date(max).toISOString();           
             const recentReportContents = getContents(fullDirName + '/' + recentReport.replace(/:/g, '_') + '.json');
             compareReports(recentReportContents, results.js);
+        } else {
+            console.log('Performance score current is ', Math.round(results.js.categories.performance.score * 100));
         }
 
-        compareScores(results.js);
-        console.log('Report is done for', results.js.finalUrl);
-        console.log('Performance score was', results.js.categories.performance.score * 100);
-
         fs.writeFile(
-            `${fullDirName}/${results.js['fetchTime'].replace(/:/g, '_')}.json`,
+            `${fullDirName}/${results.js.fetchTime.replace(/:/g, '_')}.json`,
             results.json,
             err => {
                 if(err) throw err;
